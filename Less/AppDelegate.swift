@@ -1,21 +1,19 @@
 import Cocoa
-import ServiceManagement
+import MacAppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var toggleItem: NSStatusItem!
     private var expanderItem: NSStatusItem!
     private var dragTimer: Timer?
-    private let toggleKey = "NSStatusItem Preferred Position MenulessToggle"
+    private let toggleKey = "NSStatusItem Preferred Position LessToggle"
 
     private var isExpanded: Bool {
-        get {
-            if UserDefaults.standard.object(forKey: "isExpanded") == nil { return true }
-            return UserDefaults.standard.bool(forKey: "isExpanded")
-        }
+        get { UserDefaults.standard.bool(forKey: "isExpanded") }
         set { UserDefaults.standard.set(newValue, forKey: "isExpanded") }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        UserDefaults.standard.register(defaults: ["isExpanded": true])
         setupMainMenu()
         setupStatusItems()
         applyState(activate: false)
@@ -37,8 +35,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         task.arguments = [Bundle.main.bundleURL.path]
-        try? task.run()
-        NSApp.terminate(nil)
+        do {
+            try task.run()
+            NSApp.terminate(nil)
+        } catch {
+            print("Relaunch failed: \(error)")
+        }
+    }
+
+    deinit {
+        UserDefaults.standard.removeObserver(self, forKeyPath: toggleKey)
     }
 
     // MARK: - Setup
@@ -47,9 +53,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let mainMenu = NSMenu()
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About Menuless", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        let aboutItem = NSMenuItem(title: "About Less", action: #selector(openAbout), keyEquivalent: "")
+        aboutItem.target = self
+        appMenu.addItem(aboutItem)
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit Menuless", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "Quit Less", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
         NSApp.mainMenu = mainMenu
@@ -58,7 +66,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupStatusItems() {
         // Toggle button (always visible)
         toggleItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        toggleItem.autosaveName = "MenulessToggle"
+        toggleItem.autosaveName = "LessToggle"
         if let button = toggleItem.button {
             button.target = self
             button.action = #selector(statusItemClicked)
@@ -66,14 +74,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Snap expander position to toggle before creating it
-        let expanderKey = "NSStatusItem Preferred Position MenulessExpander"
+        let expanderKey = "NSStatusItem Preferred Position LessExpander"
         if let togglePos = UserDefaults.standard.object(forKey: toggleKey) as? Double {
             UserDefaults.standard.set(togglePos + 1, forKey: expanderKey)
         }
 
         // Expander (to the left of toggle — hides items when wide)
         expanderItem = NSStatusBar.system.statusItem(withLength: 0)
-        expanderItem.autosaveName = "MenulessExpander"
+        expanderItem.autosaveName = "LessExpander"
     }
 
     // MARK: - Toggle
@@ -103,14 +111,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func showContextMenu() {
         let menu = NSMenu()
 
-        let title = NSMenuItem(title: "Menuless", action: nil, keyEquivalent: "")
+        let title = NSMenuItem(title: "Less", action: nil, keyEquivalent: "")
         title.isEnabled = false
         menu.addItem(title)
         menu.addItem(.separator())
 
         let login = NSMenuItem(title: "Start on Login", action: #selector(toggleLogin), keyEquivalent: "")
         login.target = self
-        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        login.state = LoginItem.isEnabled ? .on : .off
         menu.addItem(login)
 
         menu.addItem(.separator())
@@ -121,15 +129,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         toggleItem.menu = nil
     }
 
+    @objc private func openAbout() {
+        NSWorkspace.shared.open(URL(string: "https://apps.vlad.studio/less")!)
+    }
+
     @objc private func toggleLogin() {
-        do {
-            if SMAppService.mainApp.status == .enabled {
-                try SMAppService.mainApp.unregister()
-            } else {
-                try SMAppService.mainApp.register()
-            }
-        } catch {
-            print("Login item error: \(error)")
-        }
+        LoginItem.toggle()
     }
 }
