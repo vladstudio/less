@@ -1,11 +1,13 @@
 import Cocoa
 import MacAppKit
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var toggleItem: NSStatusItem!
     private var expanderItem: NSStatusItem!
     private var dragTimer: Timer?
+    private var isRelaunching = false
     private let toggleKey = "NSStatusItem Preferred Position LessToggle"
+    private let expanderKey = "NSStatusItem Preferred Position LessExpander"
 
     private var isExpanded: Bool {
         get { UserDefaults.standard.bool(forKey: "isExpanded") }
@@ -26,8 +28,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard keyPath == toggleKey else { return }
         // Debounce — restart after drag ends
         dragTimer?.invalidate()
-        dragTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
-            self.relaunch()
+        dragTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            self?.relaunch()
         }
     }
 
@@ -40,10 +42,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
         } catch {
             print("Relaunch failed: \(error)")
+            isRelaunching = false
+            applyState(activate: false)
         }
     }
 
-    deinit {
+    func applicationWillTerminate(_ notification: Notification) {
+        dragTimer?.invalidate()
         UserDefaults.standard.removeObserver(self, forKeyPath: toggleKey)
     }
 
@@ -73,11 +78,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
-        // Snap expander position to toggle before creating it
-        let expanderKey = "NSStatusItem Preferred Position LessExpander"
-        if let togglePos = UserDefaults.standard.object(forKey: toggleKey) as? Double {
-            UserDefaults.standard.set(togglePos + 1, forKey: expanderKey)
-        }
+        snapExpanderPosition()
 
         // Expander (hides items when wide)
         expanderItem = NSStatusBar.system.statusItem(withLength: 0)
@@ -87,13 +88,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Toggle
 
     @objc private func statusItemClicked() {
-        guard let event = NSApp.currentEvent else { return }
+        guard !isRelaunching, let event = NSApp.currentEvent else { return }
         if event.type == .rightMouseUp {
             showContextMenu()
         } else {
             isExpanded.toggle()
             if isExpanded {
-                // Expanding: relaunch for clean layout (avoids gap)
+                isRelaunching = true
                 relaunch()
             } else {
                 applyState(activate: false)
@@ -101,7 +102,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func snapExpanderPosition() {
+        if let togglePos = UserDefaults.standard.object(forKey: toggleKey) as? Double {
+            UserDefaults.standard.set(togglePos + 1, forKey: expanderKey)
+        }
+    }
+
     private func applyState(activate: Bool) {
+        snapExpanderPosition()
         expanderItem.length = isExpanded ? 0 : 10000
         let name = isExpanded ? "chevron.left" : "chevron.right"
         let desc = isExpanded ? "Hide menu bar items" : "Show menu bar items"
@@ -115,6 +123,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showContextMenu() {
         let menu = NSMenu()
+        menu.delegate = self
 
         let title = NSMenuItem(title: "Less", action: nil, keyEquivalent: "")
         title.isEnabled = false
@@ -131,11 +140,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         toggleItem.menu = menu
         toggleItem.button?.performClick(nil)
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
         toggleItem.menu = nil
     }
 
     @objc private func openAbout() {
-        NSWorkspace.shared.open(URL(string: "https://apps.vlad.studio/less")!)
+        guard let url = URL(string: "https://apps.vlad.studio/less") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     @objc private func toggleLogin() {
