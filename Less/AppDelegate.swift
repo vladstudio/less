@@ -79,7 +79,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             UserDefaults.standard.set(togglePos + 1, forKey: expanderKey)
         }
 
-        // Expander (to the left of toggle — hides items when wide)
+        // Expander (hides items when wide)
         expanderItem = NSStatusBar.system.statusItem(withLength: 0)
         expanderItem.autosaveName = "LessExpander"
     }
@@ -92,7 +92,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             showContextMenu()
         } else {
             isExpanded.toggle()
-            applyState(activate: isExpanded)
+            if isExpanded {
+                // Expanding: relaunch for clean layout (avoids gap)
+                relaunch()
+            } else {
+                applyState(activate: false)
+            }
         }
     }
 
