@@ -34,14 +34,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func relaunch() {
+        guard !isRelaunching else { return }
+        isRelaunching = true
+        let appPath = Bundle.main.bundleURL.path
+        let pid = ProcessInfo.processInfo.processIdentifier
         let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        task.arguments = [Bundle.main.bundleURL.path]
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "while kill -0 \(pid) 2>/dev/null; do sleep 0.1; done; open \"\(appPath)\""]
         do {
             try task.run()
             NSApp.terminate(nil)
         } catch {
             print("Relaunch failed: \(error)")
+            isExpanded = !isExpanded
             isRelaunching = false
             applyState(activate: false)
         }
@@ -94,7 +99,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             isExpanded.toggle()
             if isExpanded {
-                isRelaunching = true
                 relaunch()
             } else {
                 applyState(activate: false)
