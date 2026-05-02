@@ -39,8 +39,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let appPath = Bundle.main.bundleURL.path
         let pid = ProcessInfo.processInfo.processIdentifier
         let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/sh")
-        task.arguments = ["-c", "while kill -0 \(pid) 2>/dev/null; do sleep 0.1; done; open \"\(appPath)\""]
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/nohup")
+        task.arguments = [
+            "/bin/sh", "-c",
+            "n=50; while /bin/kill -0 \"$1\" 2>/dev/null && [ $n -gt 0 ]; do n=$((n-1)); /bin/sleep 0.1; done; /usr/bin/open -n \"$2\"",
+            "less-relaunch", "\(pid)", appPath
+        ]
+        task.standardInput = FileHandle.nullDevice
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
         do {
             try task.run()
             NSApp.terminate(nil)
