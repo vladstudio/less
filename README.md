@@ -8,6 +8,8 @@ Tired of a crowded menu bar? Less adds a small toggle button -- click once and e
 
 **Requires macOS 15 (Sequoia) or later.**
 
+<video src="web/less.mp4" width="800" autoplay loop muted playsinline></video>
+
 ## Install
 
 ```sh
